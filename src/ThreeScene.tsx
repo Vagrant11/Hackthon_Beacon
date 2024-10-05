@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
@@ -9,15 +9,19 @@ interface ThreeSceneProps {
 const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
     const mountRef = useRef<HTMLDivElement | null>(null);
     const cubeRef = useRef<THREE.Mesh | null>(null); // 정육면체 참조
-    
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null); // 카메라 참조
+    const [visited, setVisited] = useState<{ x: number; y: number; z: number }[]>([]); // 방문한 위치들 저장
+    const sceneRef = useRef<THREE.Scene | null>(null); // THREE.Scene 참조 추가
 
     useEffect(() => {
         // 씬 초기 설정
-        let scene = new THREE.Scene();
-        let camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
+        const scene = new THREE.Scene();
+        sceneRef.current = scene; // Scene 참조 저장
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
         camera.position.set(15, 20, 30);
+        cameraRef.current = camera; // 카메라 참조 저장
 
-        let renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         if (mountRef.current) {
@@ -74,12 +78,39 @@ const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
         };
     }, []);
 
-    // 위치가 변경될 때마다 상자의 위치만 업데이트
+    // 위치가 변경될 때마다 상자의 위치 업데이트 + 이전 위치 기록
     useEffect(() => {
         if (cubeRef.current) {
-            cubeRef.current.position.set(position.x, position.y, position.z); // 상자의 위치만 변경
+            // 상자의 위치 업데이트
+            cubeRef.current.position.set(position.x, position.y, position.z);
+
+            // 새로운 위치를 visited 리스트에 추가
+            setVisited((prevVisited) => [...prevVisited, { x: position.x, y: position.y, z: position.z }]);
         }
-    }, [position]); // position 값이 변경될 때만 실행
+
+        if (cameraRef.current) {
+            // 카메라가 정육면체를 따라가도록 설정 (비콘을 따라감)
+            const cameraDistance = 30; // 카메라가 정육면체에서 떨어진 거리
+            cameraRef.current.position.set(position.x + cameraDistance, position.y + cameraDistance, position.z + cameraDistance);
+            cameraRef.current.lookAt(position.x, position.y, position.z); // 카메라가 정육면체를 바라보도록 설정
+        }
+    }, [position]);
+
+    // 방문한 위치들에 점 추가
+    useEffect(() => {
+        if (sceneRef.current && visited.length > 0) {
+            visited.forEach((pos) => {
+                // 각 방문한 위치에 대해 작은 점(SphereGeometry)을 추가
+                const dotGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+                const dotMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+                dot.position.set(pos.x, pos.y, pos.z);
+
+                // 씬에 점을 추가
+                sceneRef.current?.add(dot);
+            });
+        }
+    }, [visited]); // visited 리스트가 변경될 때마다 실행
 
     return <div ref={mountRef} />;
 };
