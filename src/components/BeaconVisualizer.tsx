@@ -1,6 +1,6 @@
-import React, { useRef, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Line } from '@react-three/drei';
+import React, { useRef, useMemo, useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, Line, PerspectiveCamera } from '@react-three/drei'; // 使用 @react-three/drei 的 PerspectiveCamera
 import { BeaconData } from './DataParser';
 import * as THREE from 'three';
 
@@ -11,16 +11,16 @@ interface BeaconProps {
 function Beacon({ data }: BeaconProps) {
     const meshRef = useRef<THREE.Mesh>(null!);
 
-    useFrame(() => {
+    useEffect(() => {
         if (meshRef.current) {
             meshRef.current.position.set(data.position.x, data.position.y, data.position.z);
             meshRef.current.rotation.set(data.rotation.pitch, data.rotation.yaw, data.rotation.roll);
         }
-    });
+    }, [data]);
 
     return (
         <mesh ref={meshRef}>
-            <sphereGeometry args={[0.5, 32, 32]} />
+            <sphereGeometry args={[10, 32, 32]} />
             <meshStandardMaterial color="orange" />
         </mesh>
     );
@@ -31,7 +31,57 @@ function BeaconPath({ data }: { data: BeaconData[] }) {
         return data.map(d => new THREE.Vector3(d.position.x, d.position.y, d.position.z));
     }, [data]);
 
-    return <Line points={points} color="blue" lineWidth={1} />;
+    return <Line points={points} color="blue" lineWidth={2} />;
+}
+
+function AutoScaleScene({ beaconDataArray }: { beaconDataArray: BeaconData[] }) {
+    const { camera, scene } = useThree();
+    const controlsRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (beaconDataArray.length === 0) return;
+
+        const box = new THREE.Box3();
+
+        beaconDataArray.forEach(data => {
+            box.expandByPoint(new THREE.Vector3(data.position.x, data.position.y, data.position.z));
+        });
+
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+
+        if (camera instanceof THREE.PerspectiveCamera) {
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+            cameraZ *= 1.5; // Zoom out a little so objects don't fill the screen
+
+            camera.position.set(center.x, center.y, center.z + cameraZ);
+            camera.lookAt(center);
+            camera.updateProjectionMatrix();
+
+            // Update OrbitControls
+            if (controlsRef.current) {
+                controlsRef.current.target.set(center.x, center.y, center.z);
+                controlsRef.current.maxDistance = cameraZ * 2;
+                controlsRef.current.minDistance = cameraZ / 3;
+                controlsRef.current.update();
+            }
+        } else {
+            // Handle OrthographicCamera if needed
+            console.warn('OrthographicCamera is not fully supported in this auto-scaling function');
+        }
+
+    }, [beaconDataArray, camera, scene]);
+
+    return (
+        <>
+            <OrbitControls ref={controlsRef} />
+            <BeaconPath data={beaconDataArray} />
+            {beaconDataArray.length > 0 && <Beacon data={beaconDataArray[beaconDataArray.length - 1]} />}
+        </>
+    );
 }
 
 interface BeaconVisualizerProps {
@@ -39,20 +89,14 @@ interface BeaconVisualizerProps {
 }
 
 export default function BeaconVisualizer({ beaconDataArray }: BeaconVisualizerProps) {
-    const latestData = beaconDataArray[beaconDataArray.length - 1];
-
-    console.log("Rendering BeaconVisualizer with", beaconDataArray.length, "data points");
-
     return (
         <div style={{ width: '100%', height: '600px' }}>
-            <Canvas camera={{ position: [0, 0, 1000] }}>
+            <Canvas>
+                <PerspectiveCamera makeDefault position={[0, 0, 1000]} />
                 <ambientLight intensity={0.5} />
                 <pointLight position={[10, 10, 10]} />
-                {latestData && <Beacon data={latestData} />}
-                <BeaconPath data={beaconDataArray} />
-                <OrbitControls />
+                <AutoScaleScene beaconDataArray={beaconDataArray} />
             </Canvas>
-
         </div>
     );
 }
