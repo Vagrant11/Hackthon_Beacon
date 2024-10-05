@@ -1,100 +1,75 @@
-import React, { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Line, PerspectiveCamera } from '@react-three/drei'; // 使用 @react-three/drei 的 PerspectiveCamera
-import { BeaconData } from './DataParser';
+import React, { useRef, useEffect, useState } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import ThreeGlobe from 'three-globe';
+import { BeaconData } from './DataParser';
 
-interface BeaconProps {
-    data: BeaconData;
-}
-
-function Beacon({ data }: BeaconProps) {
-    const meshRef = useRef<THREE.Mesh>(null!);
-
-    useEffect(() => {
-        if (meshRef.current) {
-            meshRef.current.position.set(0, 0, 0); // 圆心固定在 (0, 0, 0)
-            meshRef.current.rotation.set(data.rotation.pitch, data.rotation.yaw, data.rotation.roll);
-        }
-    }, [data]);
-
-    return (
-        <mesh ref={meshRef}>
-            <sphereGeometry args={[200, 32, 32]} />
-            <meshStandardMaterial color="orange" />
-        </mesh>
-    );
-}
-
-function BeaconPath({ data }: { data: BeaconData[] }) {
-    const points = useMemo(() => {
-        return data.map(d => new THREE.Vector3(d.position.x, d.position.y, d.position.z));
-    }, [data]);
-
-    return <Line points={points} color="blue" lineWidth={2} />;
-}
-
-function AutoScaleScene({ beaconDataArray }: { beaconDataArray: BeaconData[] }) {
-    const { camera, scene } = useThree();
-    const controlsRef = useRef<any>(null);
+const Globe = ({ beaconDataArray }: { beaconDataArray: BeaconData[] }) => {
+    const globeRef = useRef<any>();
+    const { scene } = useThree();
+    const [globeReady, setGlobeReady] = useState(false);
 
     useEffect(() => {
-        if (beaconDataArray.length === 0) return;
+        if (!globeRef.current) {
+            const globe = new ThreeGlobe()
+                .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+                .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+                .showAtmosphere(true)
+                .atmosphereColor('#3a228a')
+                .atmosphereAltitude(0.25);
 
-        const box = new THREE.Box3();
+            globe.onGlobeReady(() => {
+                setGlobeReady(true);
+            });
 
-        beaconDataArray.forEach(data => {
-            box.expandByPoint(new THREE.Vector3(data.position.x, data.position.y, data.position.z));
-        });
-
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-
-        const maxDim = Math.max(size.x, size.y, size.z);
-
-        if (camera instanceof THREE.PerspectiveCamera) {
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= 1.5; // Zoom out a little so objects don't fill the screen
-
-            camera.position.set(center.x, center.y, center.z + cameraZ);
-            camera.lookAt(center);
-            camera.updateProjectionMatrix();
-
-            // Update OrbitControls
-            if (controlsRef.current) {
-                controlsRef.current.target.set(center.x, center.y, center.z);
-                controlsRef.current.update(); // 删除 minDistance 和 maxDistance 的设置
-            }
-        } else {
-            // Handle OrthographicCamera if needed
-            console.warn('OrthographicCamera is not fully supported in this auto-scaling function');
+            globeRef.current = globe;
+            scene.add(globe);
         }
 
-    }, [beaconDataArray, camera, scene]);
+        if (globeReady && beaconDataArray.length > 0) {
+            // 添加轨道路径
+            const pathData = beaconDataArray.map(d => ({
+                startLat: d.position.y,
+                startLng: d.position.x,
+                endLat: d.position.y,
+                endLng: d.position.x,
+                alt: Math.max(0.1, d.position.z / 6371) // 调整高度比例，确保可见
+            }));
 
-    return (
-        <>
-            <OrbitControls ref={controlsRef} minDistance={1} maxDistance={10000} />
-            <BeaconPath data={beaconDataArray} />
-            {beaconDataArray.length > 0 && <Beacon data={beaconDataArray[beaconDataArray.length - 1]} />}
-        </>
-    );
-}
+            globeRef.current
+                .arcsData(pathData)
+                .arcColor(() => 'rgba(255,165,0,0.8)') // 橙色轨道
+                .arcAltitude('alt')
+                .arcStroke(1) // 增加轨道宽度
+                .arcDashLength(0.9)
+                .arcDashGap(4)
+                .arcDashAnimateTime(1000);
+        }
 
-interface BeaconVisualizerProps {
-    beaconDataArray: BeaconData[];
-}
+    }, [beaconDataArray, scene, globeReady]);
 
-export default function BeaconVisualizer({ beaconDataArray }: BeaconVisualizerProps) {
+    useFrame(() => {
+        if (globeRef.current) {
+            globeRef.current.rotation.y += 0.002;
+        }
+    });
+
+    return null;
+};
+
+const BeaconVisualizer: React.FC<{ beaconDataArray: BeaconData[] }> = ({ beaconDataArray }) => {
     return (
         <div style={{ width: '100%', height: '600px' }}>
-            <Canvas>
-                <PerspectiveCamera makeDefault position={[0, 0, 1000]} />
-                <ambientLight intensity={0.5} />
-                <pointLight position={[10, 10, 10]} />
-                <AutoScaleScene beaconDataArray={beaconDataArray} />
+            <Canvas camera={{ position: [0, 0, 300], fov: 60 }} style={{ background: 'black' }}>
+                <ambientLight intensity={0.3} />
+                <pointLight position={[100, 100, 100]} intensity={0.6} />
+                <pointLight position={[-100, -100, -100]} intensity={0.6} />
+                <Globe beaconDataArray={beaconDataArray} />
+                <OrbitControls enablePan={false} enableZoom={true} enableRotate={true} />
             </Canvas>
         </div>
     );
-}
+};
+
+export default BeaconVisualizer;
