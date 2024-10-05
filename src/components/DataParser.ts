@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 export interface BeaconData {
     messageId: number;
     timestamp: string;
@@ -13,27 +15,13 @@ export interface BeaconData {
     };
 }
 
-export function parseBeaconMessage(message: string): BeaconData {
+export function parseBeaconMessage(message: string): BeaconData | null {
     const regex = /Message (\d+).*D\[([^\]]+)\].*L\[([-\d.]+),([-\d.]+),([-\d.]+)\].*R\[([-\d.]+),([-\d.]+),([-\d.]+)\].*RD\[([^\]]+)\]/;
-
     const match = message.match(regex);
 
-    if (!match) {
-        throw new Error("Invalid message format");
-    }
+    if (!match) return null;
 
-    const [
-        ,
-        messageId,
-        timestamp,
-        x,
-        y,
-        z,
-        yaw,
-        pitch,
-        roll,
-        realTimestamp
-    ] = match;
+    const [, messageId, , x, y, z, yaw, pitch, roll, realTimestamp] = match;
 
     return {
         messageId: parseInt(messageId),
@@ -49,4 +37,22 @@ export function parseBeaconMessage(message: string): BeaconData {
             roll: parseFloat(roll)
         }
     };
+}
+
+export function useBeaconData(filePath: string) {
+    const [beaconDataArray, setBeaconDataArray] = useState<BeaconData[]>([]);
+
+    useEffect(() => {
+        fetch(filePath)
+            .then(response => response.text())
+            .then(text => {
+                const messages = text.split('Message').filter(msg => msg.trim());
+                const parsedData = messages.map(msg => parseBeaconMessage('Message' + msg)).filter((data): data is BeaconData => data !== null);
+                setBeaconDataArray(parsedData);
+                console.log("Data loaded successfully. Parsed", parsedData.length, "messages.");
+            })
+            .catch(error => console.error('Error loading beacon data:', error));
+    }, [filePath]);
+
+    return beaconDataArray;
 }
