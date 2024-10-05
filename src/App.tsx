@@ -1,23 +1,31 @@
-import React from 'react';
-import BeaconVisualizer from './components/BeaconVisualizer';
-import { useBeaconData } from './components/DataParser';
+import React, { useState, useEffect } from 'react';
+import ThreeScene from './ThreeScene';
 
 const App: React.FC = () => {
-    const beaconDataArray = useBeaconData('/updated_beacon_output.txt');
+    const [position, setPosition] = useState({ x: 0, y: 0, z: 0 });
 
-    console.log("Beacon data length:", beaconDataArray.length);
+    useEffect(() => {
+        const positions = [
+            { x: 0, y: 0, z: 0 },
+            { x: 5, y: 5, z: 5 },
+            { x: 10, y: 10, z: 10 }
+        ];
+
+        let currentStep = 0;
+        const interval = setInterval(() => {
+            // 위치 변경
+            setPosition(positions[currentStep]);
+            currentStep = (currentStep + 1) % positions.length; // 위치 순환
+        }, 2000); // 2초마다 위치 변경
+
+        return () => clearInterval(interval); // 컴포넌트가 언마운트될 때 인터벌 제거
+    }, []);
 
     return (
         <div>
             <h1>ANT61 Beacon Visualizer</h1>
-            {beaconDataArray.length > 0 ? (
-                <>
-                    <p>Loaded {beaconDataArray.length} data points.</p>
-                    <BeaconVisualizer beaconDataArray={beaconDataArray} />
-                </>
-            ) : (
-                <p>Loading data...</p>
-            )}
+            {/* ThreeScene 컴포넌트에 동적인 위치 정보 전달 */}
+            <ThreeScene position={position} />
         </div>
     );
 };
