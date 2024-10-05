@@ -13,14 +13,14 @@ function Beacon({ data }: BeaconProps) {
 
     useEffect(() => {
         if (meshRef.current) {
-            meshRef.current.position.set(data.position.x, data.position.y, data.position.z);
+            meshRef.current.position.set(0, 0, 0); // 圆心固定在 (0, 0, 0)
             meshRef.current.rotation.set(data.rotation.pitch, data.rotation.yaw, data.rotation.roll);
         }
     }, [data]);
 
     return (
         <mesh ref={meshRef}>
-            <sphereGeometry args={[10, 32, 32]} />
+            <sphereGeometry args={[200, 32, 32]} />
             <meshStandardMaterial color="orange" />
         </mesh>
     );
@@ -64,9 +64,7 @@ function AutoScaleScene({ beaconDataArray }: { beaconDataArray: BeaconData[] }) 
             // Update OrbitControls
             if (controlsRef.current) {
                 controlsRef.current.target.set(center.x, center.y, center.z);
-                controlsRef.current.maxDistance = cameraZ * 2;
-                controlsRef.current.minDistance = cameraZ / 3;
-                controlsRef.current.update();
+                controlsRef.current.update(); // 删除 minDistance 和 maxDistance 的设置
             }
         } else {
             // Handle OrthographicCamera if needed
@@ -77,7 +75,7 @@ function AutoScaleScene({ beaconDataArray }: { beaconDataArray: BeaconData[] }) 
 
     return (
         <>
-            <OrbitControls ref={controlsRef} />
+            <OrbitControls ref={controlsRef} minDistance={1} maxDistance={10000} />
             <BeaconPath data={beaconDataArray} />
             {beaconDataArray.length > 0 && <Beacon data={beaconDataArray[beaconDataArray.length - 1]} />}
         </>
