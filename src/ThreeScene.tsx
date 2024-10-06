@@ -3,20 +3,45 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 interface ThreeSceneProps {
-    position: { x: number; y: number; z: number }; // 위치 정보를 위한 props 타입 정의
+    position: { x: number; y: number; z: number };
+    rotation: { yaw: number; pitch: number; roll: number };
+    acceleration: { x: number; y: number; z: number };
 }
 
-const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
+const ThreeScene: React.FC<ThreeSceneProps> = ({ position, rotation, acceleration }) => {
     const mountRef = useRef<HTMLDivElement | null>(null);
-    const cubeRef = useRef<THREE.Mesh | null>(null); // 정육면체 참조
-    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null); // 카메라 참조
-    const controlsRef = useRef<OrbitControls | null>(null); // OrbitControls 참조
-    const [visited, setVisited] = useState<{ x: number; y: number; z: number }[]>([]); // 방문한 위치들 저장
-    const sceneRef = useRef<THREE.Scene | null>(null); // THREE.Scene 참조 추가
-    const globeRef = useRef<HTMLElement | null>(null); // DOM 참조
+    const cubeRef = useRef<THREE.Mesh | null>(null);
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+    const controlsRef = useRef<OrbitControls | null>(null);
+    const [visited, setVisited] = useState<{ x: number; y: number; z: number }[]>([]);
+    const sceneRef = useRef<THREE.Scene | null>(null);
+    const [selectedInfo, setSelectedInfo] = useState<string>('position');
+
+    // 각 축에 대한 ArrowHelper 참조
+    const arrowHelperXRef = useRef<THREE.ArrowHelper | null>(null);
+    const arrowHelperYRef = useRef<THREE.ArrowHelper | null>(null);
+    const arrowHelperZRef = useRef<THREE.ArrowHelper | null>(null);
+
+    // 기존 시각적 요소 삭제 함수
+    const removeExistingVisuals = () => {
+        if (sceneRef.current) {
+            // 기존 화살표 제거
+            if (arrowHelperXRef.current) {
+                sceneRef.current.remove(arrowHelperXRef.current);
+                arrowHelperXRef.current = null;
+            }
+            if (arrowHelperYRef.current) {
+                sceneRef.current.remove(arrowHelperYRef.current);
+                arrowHelperYRef.current = null;
+            }
+            if (arrowHelperZRef.current) {
+                sceneRef.current.remove(arrowHelperZRef.current);
+                arrowHelperZRef.current = null;
+            }
+        }
+    };
 
     useEffect(() => {
-        // rendering setting
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -24,19 +49,17 @@ const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
             mountRef.current.appendChild(renderer.domElement);
         }
 
-        // camera setting
         const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 20000);
         camera.position.set(15, 20, 30);
-        cameraRef.current = camera; // 카메라 참조 저장
+        cameraRef.current = camera;
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.minDistance = 10;
         controls.maxDistance = 6000;
         controls.maxPolarAngle = Math.PI;
-        controlsRef.current = controls; // OrbitControls 참조 저장
+        controlsRef.current = controls;
 
-        // Backgound
         const scene = new THREE.Scene();
-        sceneRef.current = scene; // Scene 참조 저장
+        sceneRef.current = scene;
         scene.add(new THREE.AmbientLight(0x666666));
 
         const light = new THREE.PointLight(0xffffff, 3, 0, 0);
@@ -46,24 +69,21 @@ const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
         scene.add(new THREE.AxesHelper(20));
 
         const group = new THREE.Group();
-        scene.add(group);   
+        scene.add(group);
 
-        // 지구 텍스처 로드
         const textureLoader = new THREE.TextureLoader();
-        const earthTexture = textureLoader.load('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg'); // 다운받은 지구 텍스처 파일
+        const earthTexture = textureLoader.load('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
         const bumpMap = textureLoader.load('//unpkg.com/three-globe/example/img/earth-topology.png');
 
-        // 지구 생성
         const earthGeometry = new THREE.SphereGeometry(6371, 256, 256);
         const earthMaterial = new THREE.MeshPhongMaterial({
             map: earthTexture,
             bumpMap: bumpMap,
-            bumpScale: 0.05, // 높이 효과
+            bumpScale: 0.05,
         });
         const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-        scene.add(earth); // 씬에 지구 추가
+        scene.add(earth);
 
-        // 비콘 생성 및 초기 위치 설정
         const boxGeometry = new THREE.BoxGeometry(10, 2.5, 10);
         const boxMaterial = new THREE.MeshLambertMaterial({
             color: 0xfc6601,
@@ -72,18 +92,17 @@ const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
         });
 
         const cube = new THREE.Mesh(boxGeometry, boxMaterial);
-        cube.position.set(position.x, position.y, position.z); // 초기 위치 설정
+        cube.position.set(position.x, position.y, position.z);
         group.add(cube);
 
-        cubeRef.current = cube; // 정육면체 참조 저장
+        cubeRef.current = cube;
 
         const animate = () => {
-            renderer.render(scene, camera); // 카메라와 씬의 상태를 유지하면서 렌더링
+            renderer.render(scene, camera);
         };
 
-        renderer.setAnimationLoop(animate); // 애니메이션 루프 설정
+        renderer.setAnimationLoop(animate);
 
-        // Window setting
         const onWindowResize = () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -98,40 +117,116 @@ const ThreeScene: React.FC<ThreeSceneProps> = ({ position }) => {
         };
     }, []);
 
+    // 비콘에 회전 정보 적용
+    useEffect(() => {
+        if (cubeRef.current) {
+            // yaw: y축, pitch: x축, roll: z축 회전 적용
+            cubeRef.current.rotation.set(
+                THREE.MathUtils.degToRad(rotation.pitch),  // pitch -> x축 회전
+                THREE.MathUtils.degToRad(rotation.yaw),    // yaw -> y축 회전
+                THREE.MathUtils.degToRad(rotation.roll)    // roll -> z축 회전
+            );
+        }
+    }, [rotation]);
+
     // 위치가 변경될 때마다 상자의 위치 업데이트 + 이전 위치 기록
     useEffect(() => {
         if (cubeRef.current) {
-            // 상자의 위치 업데이트
             cubeRef.current.position.set(position.x, position.y, position.z);
-
-            // 새로운 위치를 visited 리스트에 추가
             setVisited((prevVisited) => [...prevVisited, { x: position.x, y: position.y, z: position.z }]);
         }
 
         if (controlsRef.current) {
-            // OrbitControls의 target을 비콘의 위치로 설정
             controlsRef.current.target.set(position.x, position.y, position.z);
-            controlsRef.current.update(); // OrbitControls 업데이트
+            controlsRef.current.update();
         }
     }, [position]);
 
-    // 방문한 위치들에 점 추가
+    // visited 배열에 기반하여 past path 점 표시
     useEffect(() => {
         if (sceneRef.current && visited.length > 0) {
             visited.forEach((pos) => {
-                // 각 방문한 위치에 대해 작은 점(SphereGeometry)을 추가
                 const dotGeometry = new THREE.SphereGeometry(0.5, 16, 16);
                 const dotMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
                 const dot = new THREE.Mesh(dotGeometry, dotMaterial);
                 dot.position.set(pos.x, pos.y, pos.z);
-
-                // 씬에 점을 추가
-                sceneRef.current?.add(dot);
+                sceneRef.current?.add(dot); // 점 추가
             });
         }
-    }, [visited]); // visited 리스트가 변경될 때마다 실행
+    }, [visited]);
 
-    return <div ref={mountRef} />;
+    // 선택된 정보에 따른 시각적 요소 처리
+    useEffect(() => {
+        removeExistingVisuals(); // 새로운 정보가 선택될 때 기존 요소 제거
+
+        if (selectedInfo === 'acceleration' && sceneRef.current) {
+            const directionX = new THREE.Vector3(1, 0, 0).normalize();
+            const lengthX = Math.abs(acceleration.x);
+            const arrowHelperX = new THREE.ArrowHelper(directionX, new THREE.Vector3(position.x, position.y, position.z), lengthX * 50, 0xff0000);
+            sceneRef.current.add(arrowHelperX);
+            arrowHelperXRef.current = arrowHelperX;
+
+            const directionY = new THREE.Vector3(0, 1, 0).normalize();
+            const lengthY = Math.abs(acceleration.y);
+            const arrowHelperY = new THREE.ArrowHelper(directionY, new THREE.Vector3(position.x, position.y, position.z), lengthY * 50, 0x00ff00);
+            sceneRef.current.add(arrowHelperY);
+            arrowHelperYRef.current = arrowHelperY;
+
+            const directionZ = new THREE.Vector3(0, 0, 1).normalize();
+            const lengthZ = acceleration.z;
+            const arrowHelperZ = new THREE.ArrowHelper(directionZ, new THREE.Vector3(position.x, position.y, position.z), lengthZ * 50, 0x0000ff);
+            sceneRef.current.add(arrowHelperZ);
+            arrowHelperZRef.current = arrowHelperZ;
+        }
+    }, [rotation, acceleration, selectedInfo]);
+
+    const renderInfo = () => {
+        switch (selectedInfo) {
+            case 'position':
+                return (
+                    <>
+                        <p>X: {position.x.toFixed(2)}</p>
+                        <p>Y: {position.y.toFixed(2)}</p>
+                        <p>Z: {position.z.toFixed(2)}</p>
+                    </>
+                );
+            case 'rotation':
+                return (
+                    <>
+                        <p>Yaw: {rotation.yaw.toFixed(2)}</p>
+                        <p>Pitch: {rotation.pitch.toFixed(2)}</p>
+                        <p>Roll: {rotation.roll.toFixed(2)}</p>
+                    </>
+                );
+            case 'acceleration':
+                return (
+                    <>
+                        <p>Acceleration X: {acceleration.x.toFixed(2)}</p>
+                        <p>Acceleration Y: {acceleration.y.toFixed(2)}</p>
+                        <p>Acceleration Z: {acceleration.z.toFixed(2)}</p>
+                    </>
+                );
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div style={{ position: 'relative' }}>
+            <div ref={mountRef} />
+
+            <div style={{ position: 'absolute', top: '10px', right: '10px', padding: '10px', backgroundColor: 'rgba(0, 0, 0, 0.7)', color: 'white', borderRadius: '5px', fontFamily: 'Arial, sans-serif' }}>
+                <h3>Beacon Info</h3>
+                {renderInfo()}
+
+                <div style={{ marginTop: '10px' }}>
+                    <button onClick={() => setSelectedInfo('position')} style={{ marginRight: '5px' }}>Position</button>
+                    <button onClick={() => setSelectedInfo('rotation')} style={{ marginRight: '5px' }}>Rotation</button>
+                    <button onClick={() => setSelectedInfo('acceleration')}>Acceleration</button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default ThreeScene;
